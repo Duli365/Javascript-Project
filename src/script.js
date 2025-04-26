@@ -40,6 +40,8 @@ function getTransactionsFromStorage() {
   return transactions ? JSON.parse(transactions) : [];
 }
 
+import { generateReport } from "./utilities/generateReport.js";
+
 let categories = JSON.parse(localStorage.getItem("categories")) || [
   "Food",
   "Transportation",
@@ -52,15 +54,33 @@ let categories = JSON.parse(localStorage.getItem("categories")) || [
 
 let transactions = getTransactionsFromStorage();
 
+// Helper function to format currency consistently
+function formatCurrency(amount) {
+  return `Rs ${amount.toFixed(2)}`;
+}
+
 // Add transaction
 function addTransaction(e, descriptionEl, amountEl, categoryEl, dateEl) {
   e.preventDefault();
 
   const amount = parseFloat(amountEl.value);
-
-  const description = descriptionEl.value;
+  const description = descriptionEl.value.trim();
   const category = categoryEl.value;
   const date = dateEl.value;
+
+  // Validation
+  if (!description) {
+    alert("Please enter a description");
+    return;
+  }
+  if (isNaN(amount) || amount === 0) {
+    alert("Please enter a valid non-zero amount");
+    return;
+  }
+  if (!date) {
+    alert("Please select a date");
+    return;
+  }
 
   const newTransaction = {
     description,
@@ -71,6 +91,12 @@ function addTransaction(e, descriptionEl, amountEl, categoryEl, dateEl) {
 
   transactions.push(newTransaction);
   updateLocalStorage();
+
+  // Reset input fields
+  descriptionEl.value = "";
+  amountEl.value = "";
+  categoryEl.value = "Other";
+  dateEl.value = "";
 }
 
 // Generate unique ID
@@ -106,18 +132,19 @@ function updateValues(balanceEl, incomeEl, expenseEl) {
     .filter((amount) => amount < 0)
     .reduce((acc, amount) => acc + amount, 0);
 
-  balanceEl.textContent = `Rs ${total}`;
-  incomeEl.textContent = `+Rs ${income}`;
-  expenseEl.textContent = `-Rs ${Math.abs(expense)}`;
+  balanceEl.textContent = `Rs ${total.toFixed(2)}`;
+  incomeEl.textContent = `+Rs ${income.toFixed(2)}`;
+  expenseEl.textContent = `-Rs ${Math.abs(expense).toFixed(2)}`;
 }
 
 // Add transactions to DOM
 function addTransactionDOM(transaction, transactionListEl) {
-  const sign = "-";
+  const sign = transaction.amount >= 0 ? "+" : "-";
 
   const item = document.createElement("li");
 
-  item.className = transaction.category === "income" ? "expense" : "income";
+  // Assign class based on amount sign, not category string
+  item.className = transaction.amount >= 0 ? "income" : "expense";
 
   const detailsDiv = document.createElement("div");
   detailsDiv.className = "details";
@@ -139,7 +166,7 @@ function addTransactionDOM(transaction, transactionListEl) {
   detailsDiv.appendChild(dateSpan);
 
   const amountSpan = document.createElement("span");
-  amountSpan.className = "amount";
+  amountSpan.className = "amount " + (transaction.amount >= 0 ? "positive" : "negative");
   amountSpan.textContent = `${sign}Rs ${Math.abs(transaction.amount).toFixed(
     2
   )}`;
@@ -262,54 +289,27 @@ function createChart(chartContainer) {
     // Don't change the following line
     chartContainer.insertAdjacentHTML("beforeend", barGroup.outerHTML);
 
-    init();
   });
-}
-
-// Generate report
-function generateReport() {
-  let reportText = "Budget Report\n\n";
-
-  // Summary
-  const totalIncome = transactions
-    .filter((t) => t.amount > 0)
-    .reduce((acc, t) => acc + t.amount, 0);
-
-  const totalExpense = transactions
-    .filter((t) => t.amount < 0)
-    .reduce((acc, t) => acc + t.amount, 0);
-
-  const balance = totalIncome + totalExpense;
-
-  reportText += `Total Income: Rs ${totalIncome.toFixed(2)}\n`;
-  reportText += `Total Expense: Rs ${Math.abs(totalExpense).toFixed(2)}\n`;
-  reportText += `Balance: Rs ${balance.toFixed(2)}\n\n`;
-
-  // Category breakdown
-  reportText += "Expense Breakdown by Category:\n";
-
-  const categorySummary = {};
-
-  transactions.forEach((t) => {
-    if (t.amount < 0) {
-      if (!categorySummary[t.category]) {
-        categorySummary[t.category] = 0;
-      }
-      categorySummary[t.category] += Math.abs(t.amount);
-    }
-  });
-
-  for (const category in categorySummary) {
-    reportText += `${category}: Rs ${categorySummary[category].toFixed(2)}\n`;
-  }
-
-  alert(reportText);
 }
 
 function setupTabs() {
   // Setup tabs
   const tabBtns = document.querySelectorAll(".tab-btn");
   const tabContents = document.querySelectorAll(".tab-content");
+
+  // If Goals tab button exists and no tab is active, activate Goals tab by default
+  const activeBtn = Array.from(tabBtns).find(btn => btn.classList.contains("active"));
+  if (!activeBtn) {
+    const goalsBtn = Array.from(tabBtns).find(btn => btn.getAttribute("data-tab") === "goals");
+    if (goalsBtn) {
+      goalsBtn.classList.add("active");
+      const goalsTab = document.getElementById("goals-tab");
+      if (goalsTab) {
+        tabContents.forEach(c => c.classList.remove("active"));
+        goalsTab.classList.add("active");
+      }
+    }
+  }
 
   tabBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -393,8 +393,8 @@ function deleteCategory(categoryName) {
     return;
   }
 
-  if (categoryName == "Other") {
-    alert("You can not delete Other category");
+  if (categoryName === "Other") {
+    alert("You cannot delete the 'Other' category");
     return;
   }
 
@@ -404,9 +404,8 @@ function deleteCategory(categoryName) {
     // Remove category from array
     categories = categories.filter((cat) => cat !== categoryName);
 
-    // Update transactions with this category to "Other" or first available category
+    // Update transactions with this category to "Other"
     const defaultCategory = "Other";
-    const transactions = getTransactionsFromStorage();
 
     transactions.forEach((transaction) => {
       if (transaction.category === categoryName) {
@@ -438,7 +437,7 @@ function updateCategoryDropdowns(categoryDropdowns) {
     categories.forEach((category) => {
       dropdown.insertAdjacentHTML(
         "beforeend",
-        `<option value="${category.toLowerCase()}">${category}</option>`
+        `<option>${category}</option>`
       );
     });
 
@@ -492,7 +491,6 @@ export {
   updateCategoryDropdowns,
   removeTransaction,
   createChart,
-  generateReport,
   openCategoryModal,
   closeCategoryModal,
   addNewCategory,
