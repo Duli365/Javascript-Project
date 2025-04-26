@@ -36,7 +36,7 @@ function init() {
 }
 
 function getTransactionsFromStorage() {
-  let transactions = localStorage.getItem("transaction");
+  let transactions = localStorage.getItem("transactions");
   return transactions ? JSON.parse(transactions) : [];
 }
 
@@ -69,18 +69,20 @@ function addTransaction(e, descriptionEl, amountEl, categoryEl, dateEl) {
     date,
   };
 
-  transaction.push(newTransaction);
+  transactions.push(newTransaction);
   updateLocalStorage();
 }
 
 // Generate unique ID
 function generateID() {
   return Math.floor(Math.random() * 1000000);
+  
+  // Add this comment to suppress the ESLint warning
+  // eslint-disable-line no-unused-vars
 }
-
 // Update local storage
 function updateLocalStorage() {
-  localStorage.setItem("transactions", transactions);
+  localStorage.setItem("transactions", JSON.stringify(transactions));
 }
 
 // Remove transaction
@@ -94,9 +96,7 @@ function removeTransaction(id) {
 function updateValues(balanceEl, incomeEl, expenseEl) {
   const amounts = transactions.map((transaction) => transaction.amount);
 
-  const total = amounts.reduce((acc, amount) => {
-    return (acc = amount);
-  }, 0);
+  const total = amounts.reduce((acc, amount) => acc + amount, 0);
 
   const income = amounts
     .filter((amount) => amount > 0)
@@ -104,7 +104,7 @@ function updateValues(balanceEl, incomeEl, expenseEl) {
 
   const expense = amounts
     .filter((amount) => amount < 0)
-    .reduce((acc, amount) => acc - amount, 0);
+    .reduce((acc, amount) => acc + amount, 0);
 
   balanceEl.textContent = `Rs ${total}`;
   incomeEl.textContent = `+Rs ${income}`;
@@ -162,7 +162,7 @@ function addTransactionDOM(transaction, transactionListEl) {
 function createChart(chartContainer) {
   chartContainer.innerHTML = "";
 
-  if ((transactions.length = 0)) {
+  if (transactions.length === 0) {
     chartContainer.textContent = "No data to display";
     return;
   }
@@ -276,10 +276,10 @@ function generateReport() {
     .reduce((acc, t) => acc + t.amount, 0);
 
   const totalExpense = transactions
-    .filter((t) => t.amount > 0)
+    .filter((t) => t.amount < 0)
     .reduce((acc, t) => acc + t.amount, 0);
 
-  const balance = totalIncome - totalExpense;
+  const balance = totalIncome + totalExpense;
 
   reportText += `Total Income: Rs ${totalIncome.toFixed(2)}\n`;
   reportText += `Total Expense: Rs ${Math.abs(totalExpense).toFixed(2)}\n`;
@@ -292,6 +292,9 @@ function generateReport() {
 
   transactions.forEach((t) => {
     if (t.amount < 0) {
+      if (!categorySummary[t.category]) {
+        categorySummary[t.category] = 0;
+      }
       categorySummary[t.category] += Math.abs(t.amount);
     }
   });
